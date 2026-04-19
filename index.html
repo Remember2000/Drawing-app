@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🎨 Ultimate Drawing App</title>
+    <style>
+        * {
+            user-select: none;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .app-container {
+            background: rgba(255,255,255,0.95);
+            border-radius: 30px;
+            padding: 20px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        canvas {
+            border: 3px solid #333;
+            border-radius: 15px;
+            cursor: crosshair;
+            background: white;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .tools {
+            margin-top: 20px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .tool-btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .tool-btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(0.95);
+        }
+
+        .tool-btn.active {
+            background: #667eea;
+            color: white;
+            box-shadow: 0 4px 10px rgba(102,126,234,0.4);
+        }
+
+        .color-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #333;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .color-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .clear-btn { background: #ff4757; color: white; }
+        .save-btn { background: #1e90ff; color: white; }
+        .undo-btn { background: #ffa502; color: white; }
+        .redo-btn { background: #2ed573; color: white; }
+        .neon-btn { background: #ff6b81; color: white; }
+        .rainbow-btn { background: linear-gradient(135deg, red, orange, yellow, green, blue, indigo, violet); color: white; }
+
+        .size-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f0f0f0;
+            padding: 5px 15px;
+            border-radius: 50px;
+        }
+
+        input[type="range"] {
+            width: 150px;
+        }
+
+        .color-palette {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .status {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+
+        @media (max-width: 900px) {
+            canvas {
+                width: 100%;
+                height: auto;
+            }
+            .tool-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <canvas id="drawingCanvas" width="900" height="550"></canvas>
+    
+    <div class="tools">
+        <div class="color-palette">
+            <div class="color-btn" style="background: #000000;" data-color="#000000"></div>
+            <div class="color-btn" style="background: #FF0000;" data-color="#FF0000"></div>
+            <div class="color-btn" style="background: #00FF00;" data-color="#00FF00"></div>
+            <div class="color-btn" style="background: #0000FF;" data-color="#0000FF"></div>
+            <div class="color-btn" style="background: #FFFF00;" data-color="#FFFF00"></div>
+            <div class="color-btn" style="background: #FF00FF;" data-color="#FF00FF"></div>
+            <div class="color-btn" style="background: #00FFFF;" data-color="#00FFFF"></div>
+            <div class="color-btn" style="background: #FFA500;" data-color="#FFA500"></div>
+        </div>
+        
+        <input type="color" id="colorPicker" value="#000000" title="Custom Color">
+        
+        <div class="size-control">
+            <span>✏️</span>
+            <input type="range" id="brushSize" min="1" max="50" value="5">
+            <span id="sizeValue">5</span>
+        </div>
+        
+        <button id="penBtn" class="tool-btn active">✏️ Pen</button>
+        <button id="eraserBtn" class="tool-btn">🧽 Eraser</button>
+        <button id="neonBtn" class="tool-btn neon-btn">✨ Neon</button>
+        <button id="rainbowBtn" class="tool-btn rainbow-btn">🌈 Rainbow</button>
+        
+        <button id="undoBtn" class="tool-btn undo-btn">↩️ Undo</button>
+        <button id="redoBtn" class="tool-btn redo-btn">↪️ Redo</button>
+        <button id="clearBtn" class="tool-btn clear-btn">🗑️ Clear</button>
+        <button id="saveBtn" class="tool-btn save-btn">💾 Save</button>
+    </div>
+    
+    <div class="status" id="status">
+        💡 Draw with mouse or touch | Active: Pen
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('drawingCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let drawing = false;
+    let color = '#000000';
+    let brushSize = 5;
+    let tool = 'pen'; // pen, eraser, neon, rainbow
+    let neonMode = false;
+    let rainbowMode = false;
+    
+    // History for undo/redo
+    let history = [];
+    let historyIndex = -1;
+    const MAX_HISTORY = 50;
+    
+    // Save initial state
+    function saveState() {
+        // Remove any future states if we're not at the end
+        if (historyIndex < history.length - 1) {
+            history = history.slice(0, historyIndex + 1);
+        }
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        history.push(imageData);
+        
+        if (history.length > MAX_HISTORY) {
+            history.shift();
+        } else {
+            historyIndex = history.length - 1;
+        }
+    }
+    
+    function undo() {
+        if (historyIndex > 0) {
+            historyIndex--;
+            ctx.putImageData(history[historyIndex], 0, 0);
+            updateStatus('Undo');
+        } else {
+            updateStatus('Nothing to undo');
+        }
+    }
+    
+    function redo() {
+        if (historyIndex < history.length - 1) {
+            historyIndex++;
+            ctx.putImageData(history[historyIndex], 0, 0);
+            updateStatus('Redo');
+        } else {
+            updateStatus('Nothing to redo');
+        }
+    }
+    
+    // Initialize canvas
+    function initCanvas() {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        saveState();
+    }
+    
+    // Rainbow color generator
+    let hue = 0;
+    function getRainbowColor() {
+        hue = (hue + 1) % 360;
+        return `hsl(${hue}, 100%, 50%)`;
+    }
+    
+    // Drawing functions
+    function startDrawing(e) {
+        drawing = true;
+        const pos = getPosition(e);
+        
+        if (tool === 'rainbow') {
+            ctx.strokeStyle = getRainbowColor();
+        } else if (tool === 'neon') {
+            ctx.strokeStyle = color;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = color;
+        } else if (tool === 'eraser') {
+            ctx.strokeStyle = 'white';
+        } else {
+            ctx.strokeStyle = color;
+            ctx.shadowBlur = 0;
+        }
+        
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+    }
+    
+    function draw(e) {
+        if (!drawing) return;
+        
+        const pos = getPosition(e);
+        
+        if (tool === 'rainbow') {
+            ctx.strokeStyle = getRainbowColor();
+        } else if (tool === 'neon') {
+            ctx.strokeStyle = color;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = color;
+        } else if (tool === 'eraser') {
+            ctx.strokeStyle = 'white';
+            ctx.shadowBlur = 0;
+        } else {
+            ctx.strokeStyle = color;
+            ctx.shadowBlur = 0;
+        }
+        
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+    }
+    
+    function stopDrawing() {
+        if (drawing) {
+            drawing = false;
+            ctx.beginPath();
+            saveState();
+        }
+    }
+    
+    function getPosition(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        let clientX, clientY;
+        
+        if (e.touches) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        
+        let x = (clientX - rect.left) * scaleX;
+        let y = (clientY - rect.top) * scaleY;
+        
+        x = Math.min(Math.max(0, x), canvas.width);
+        y = Math.min(Math.max(0, y), canvas.height);
+        
+        return { x, y };
+    }
+    
+    function updateStatus(message) {
+        const statusDiv = document.getElementById('status');
+        statusDiv.textContent = `💡 ${message}`;
+        setTimeout(() => {
+            if (!message.includes('Nothing')) {
+                statusDiv.textContent = `💡 Active: ${tool.charAt(0).toUpperCase() + tool.slice(1)} | Size: ${brushSize}px`;
+            }
+        }, 1500);
+    }
+    
+    // Event listeners
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseleave', stopDrawing);
+    
+    canvas.addEventListener('touchstart', startDrawing);
+    canvas.addEventListener('touchmove', draw);
+    canvas.addEventListener('touchend', stopDrawing);
+    
+    // Brush settings
+    function updateBrush() {
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        document.getElementById('sizeValue').textContent = brushSize;
+    }
+    
+    document.getElementById('brushSize').addEventListener('input', (e) => {
+        brushSize = e.target.value;
+        updateBrush();
+        updateStatus(`Brush size: ${brushSize}px`);
+    });
+    
+    // Color pickers
+    document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            color = btn.dataset.color;
+            document.getElementById('colorPicker').value = color;
+            if (tool !== 'rainbow') {
+                tool = 'pen';
+                neonMode = false;
+                rainbowMode = false;
+                updateActiveButtons();
+                ctx.shadowBlur = 0;
+            }
+            updateStatus(`Color changed`);
+        });
+    });
+    
+    document.getElementById('colorPicker').addEventListener('input', (e) => {
+        color = e.target.value;
+        if (tool !== 'rainbow') {
+            tool = 'pen';
+            updateActiveButtons();
+            ctx.shadowBlur = 0;
+        }
+    });
+    
+    // Tool buttons
+    document.getElementById('penBtn').addEventListener('click', () => {
+        tool = 'pen';
+        neonMode = false;
+        rainbowMode = false;
+        updateActiveButtons();
+        ctx.shadowBlur = 0;
+        updateStatus('Pen mode');
+    });
+    
+    document.getElementById('eraserBtn').addEventListener('click', () => {
+        tool = 'eraser';
+        neonMode = false;
+        rainbowMode = false;
+        updateActiveButtons();
+        ctx.shadowBlur = 0;
+        updateStatus('Eraser mode');
+    });
+    
+    document.getElementById('neonBtn').addEventListener('click', () => {
+        tool = 'neon';
+        neonMode = true;
+        rainbowMode = false;
+        updateActiveButtons();
+        updateStatus('Neon mode ✨');
+    });
+    
+    document.getElementById('rainbowBtn').addEventListener('click', () => {
+        tool = 'rainbow';
+        neonMode = false;
+        rainbowMode = true;
+        updateActiveButtons();
+        ctx.shadowBlur = 0;
+        updateStatus('Rainbow mode 🌈');
+    });
+    
+    function updateActiveButtons() {
+        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+        if (tool === 'pen') document.getElementById('penBtn').classList.add('active');
+        if (tool === 'eraser') document.getElementById('eraserBtn').classList.add('active');
+        if (tool === 'neon') document.getElementById('neonBtn').classList.add('active');
+        if (tool === 'rainbow') document.getElementById('rainbowBtn').classList.add('active');
+    }
+    
+    document.getElementById('undoBtn').addEventListener('click', undo);
+    document.getElementById('redoBtn').addEventListener('click', redo);
+    
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        if (confirm('Clear entire drawing?')) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            saveState();
+            updateStatus('Canvas cleared');
+        }
+    });
+    
+    document.getElementById('saveBtn').addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = 'my-drawing.png';
+        link.href = canvas.toDataURL();
+        link.click();
+        updateStatus('Drawing saved! 📸');
+    });
+    
+    // Initialize
+    initCanvas();
+    updateBrush();
+    updateStatus('Ready to draw!');
+</script>
+</body>
+</html>
